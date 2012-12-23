@@ -99,7 +99,7 @@ class Game(World):
         screenratio = float(screensize[0]) / screensize[1]
 
         glUniformMatrix4fv(self.world_to_camera_uniform, 1, False, identitymatrix)
-        glUniformMatrix4fv(self.camera_to_clip_uniform, 1, False, make_ortho_matrix(-2 * screenratio, 2 * screenratio, -2, 2, 10, -10))
+        glUniformMatrix4fv(self.camera_to_clip_uniform, 1, False, make_ortho_matrix(-3 * screenratio, 3 * screenratio, -3, 3, 10, -10))
 
         glBindBuffer(GL_ARRAY_BUFFER, self.vertexbuffer)
         glEnableVertexAttribArray(0)
