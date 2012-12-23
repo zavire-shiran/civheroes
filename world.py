@@ -47,6 +47,12 @@ def createprogram(*shaders):
         return -1
     return program
 
+def make_ortho_matrix(left, right, bottom, top, near, far):
+    return numpy.array([[2 / float(right - left), 0, 0, -float(right + left) / (right - left)],
+                        [0, 2 / float(top - bottom), 0, -float(top + bottom) / (top - bottom)],
+                        [0, 0, 2 / float(far - near), -float(far + near) / (far - near)],
+                        [0, 0, 0, 1]], numpy.float32)
+
 
 class World:
     def __init__(self, previous = None):
@@ -90,8 +96,10 @@ class Game(World):
 
         identitymatrix = [1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1]
 
+        screenratio = float(screensize[0]) / screensize[1]
+
         glUniformMatrix4fv(self.world_to_camera_uniform, 1, False, identitymatrix)
-        glUniformMatrix4fv(self.camera_to_clip_uniform, 1, False, identitymatrix)
+        glUniformMatrix4fv(self.camera_to_clip_uniform, 1, False, make_ortho_matrix(-2 * screenratio, 2 * screenratio, -2, 2, 10, -10))
 
         glBindBuffer(GL_ARRAY_BUFFER, self.vertexbuffer)
         glEnableVertexAttribArray(0)
