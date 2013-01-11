@@ -1,16 +1,16 @@
 #version 330
 
-uniform mat4 WorldToCameraTransform;
+uniform vec2 CameraCenter;
 uniform mat4 CameraToClipTransform;
 
 layout(location=0) in vec2 position;
-layout(location=1) in vec4 in_color;
+layout(location=1) in vec2 in_texcoord;
 
-smooth out vec4 color;
+smooth out vec2 texcoord;
 
 void main()
 {
-  vec4 pos = vec4(position.x, position.y, 0.0, 1.0);
-  gl_Position = CameraToClipTransform * WorldToCameraTransform * pos;
-  color = in_color;
+  vec4 pos = vec4(position - CameraCenter, 0.0, 1.0);
+  gl_Position = CameraToClipTransform * pos;
+  texcoord = in_texcoord;
 }

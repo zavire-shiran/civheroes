@@ -1,5 +1,6 @@
 from OpenGL.GL import *
 import numpy
+import texture
 from ctypes import c_void_p
 
 currentworld = None
@@ -47,11 +48,42 @@ def createprogram(*shaders):
         return -1
     return program
 
+
 def make_ortho_matrix(left, right, bottom, top, near, far):
     return numpy.array([[2 / float(right - left), 0, 0, -float(right + left) / (right - left)],
                         [0, 2 / float(top - bottom), 0, -float(top + bottom) / (top - bottom)],
                         [0, 0, 2 / float(far - near), -float(far + near) / (far - near)],
                         [0, 0, 0, 1]], numpy.float32)
+
+
+class Primitives:
+    def __init__(self, primtype, pos_attrib_loc, texcoord_attrib_loc):
+        self.buffer = []
+        self.glbuffer = glGenBuffers(1)
+        self.primtype = primtype
+        self.pos_attrib_loc = pos_attrib_loc
+        self.texcoord_attrib_loc = texcoord_attrib_loc
+        self.numverts = 0
+        self.possize = 2
+        self.texcoordsize = 2
+
+    def addvertex(self, pos, texcoord):
+        self.buffer += pos + texcoord
+        self.numverts += 1
+
+    def finalize_buffer(self):
+        glBindBuffer(GL_ARRAY_BUFFER, self.glbuffer)
+        glBufferData(GL_ARRAY_BUFFER, numpy.array(self.buffer, numpy.float32), GL_STATIC_DRAW)
+
+    def draw(self):
+        glBindBuffer(GL_ARRAY_BUFFER, self.glbuffer)
+
+        glEnableVertexAttribArray(0)
+        glEnableVertexAttribArray(1)
+        glVertexAttribPointer(self.pos_attrib_loc, self.possize, GL_FLOAT, GL_FALSE, (self.possize + self.texcoordsize) * 4, None)
+        glVertexAttribPointer(self.texcoord_attrib_loc, self.texcoordsize, GL_FLOAT, GL_FALSE, (self.possize + self.texcoordsize) * 4, c_void_p(self.possize * 4))
+
+        glDrawArrays(self.primtype, 0, self.numverts)
 
 
 class World:
@@ -73,10 +105,25 @@ class World:
     def step(self, dt):
         pass
 
-rawbufferdata = [0, 0,   1, 0, 0, 1,
-                 0, 0.5, 0, 1, 0, 1,
-                 0.5, 0, 0, 0, 1, 1]
+
+rawbufferdata = [0, 0, 1, 0, 0, 1,
+                 0, 1, 0, 1, 0, 1,
+                 1, 0, 0, 0, 1, 1]
 bufferdata = numpy.array(rawbufferdata, numpy.float32)
+
+backgroundbuffer = numpy.array([#-0.5, -0.5, 0, 1, 0, 1,
+                                #0.5, -0.5, 0, 1, 0, 1,
+                                #0.5, 0.5, 0, 1, 0, 1,
+                                #-0.5, 0.5, 0, 1, 0, 1,
+                                0, 0, 1, 1, 1, 1,
+                                0, -1, 1, 1, 1, 1,
+                                -1, -1, 1, 1, 1, 1,
+                                -1, 0, 1, 1, 1, 1,
+                                1, 1, 0, 0, 0, 1,
+                                1, 2, 1, 0, 0, 1,
+                                2, 2, 1, 0, 0, 1,
+                                2, 1, 0, 0, 0, 1], numpy.float32)
+
 
 class Game(World):
     def __init__(self, previous = None):
@@ -84,28 +131,66 @@ class Game(World):
         fragshader = createshader('color_fragment.shader', GL_FRAGMENT_SHADER)
         self.shaderprogram = createprogram(vertshader, fragshader)
 
-        self.world_to_camera_uniform = glGetUniformLocation(self.shaderprogram, 'WorldToCameraTransform')
+        self.camera_center_uniform = glGetUniformLocation(self.shaderprogram, 'CameraCenter')
         self.camera_to_clip_uniform = glGetUniformLocation(self.shaderprogram, 'CameraToClipTransform')
+        self.texture_uniform = glGetUniformLocation(self.shaderprogram, 'tex')
 
         self.vertexbuffer = glGenBuffers(1)
         glBindBuffer(GL_ARRAY_BUFFER, self.vertexbuffer)
         glBufferData(GL_ARRAY_BUFFER, bufferdata, GL_STATIC_DRAW)
 
+        self.backgroundbuffer = glGenBuffers(1)
+        glBindBuffer(GL_ARRAY_BUFFER, self.backgroundbuffer)
+        glBufferData(GL_ARRAY_BUFFER, backgroundbuffer, GL_STATIC_DRAW)
+
+        self.squares = Primitives(GL_QUADS, 0, 1)
+        #self.squares.addprim([[-2, 1], [-2, 2], [-3, 2], [-3, 1]], [0, 0, 1, 1])
+        self.squares.addvertex([0,0], [0,0])
+        self.squares.addvertex([0,1], [0,1])
+        self.squares.addvertex([1,1], [1,1])
+        self.squares.addvertex([1,0], [1,0])
+        self.squares.finalize_buffer()
+
+        self.tex = texture.Texture('image.png')
+
+        texsamplers = ctypes.c_uint(0)
+        glGenSamplers(1, texsamplers)
+        self.texsampler = texsamplers.value
+        glSamplerParameteri(self.texsampler, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
+        glSamplerParameteri(self.texsampler, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
+        glSamplerParameteri(self.texsampler, GL_TEXTURE_WRAP_S, GL_REPEAT)
+        glSamplerParameteri(self.texsampler, GL_TEXTURE_WRAP_T, GL_REPEAT)
+
     def draw(self):
         glUseProgram(self.shaderprogram)
 
-        identitymatrix = [1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1]
+        camerapos = [1,0]
 
         screenratio = float(screensize[0]) / screensize[1]
 
-        glUniformMatrix4fv(self.world_to_camera_uniform, 1, False, identitymatrix)
+        glUniform2fv(self.camera_center_uniform, 1, camerapos)
         glUniformMatrix4fv(self.camera_to_clip_uniform, 1, False, make_ortho_matrix(-3 * screenratio, 3 * screenratio, -3, 3, 10, -10))
 
-        glBindBuffer(GL_ARRAY_BUFFER, self.vertexbuffer)
-        glEnableVertexAttribArray(0)
-        glEnableVertexAttribArray(1)
-        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 6*4, None)
-        glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, 6*4, c_void_p(8))
+        # glBindBuffer(GL_ARRAY_BUFFER, self.vertexbuffer)
+        # glEnableVertexAttribArray(0)
+        # glEnableVertexAttribArray(1)
+        # glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 6*4, None)
+        # glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, 6*4, c_void_p(8))
 
-        glDrawArrays(GL_TRIANGLES, 0, 3)
+        # glDrawArrays(GL_TRIANGLES, 0, 3)
 
+        # glBindBuffer(GL_ARRAY_BUFFER, self.backgroundbuffer)
+        # glEnableVertexAttribArray(0)
+        # glEnableVertexAttribArray(1)
+        # glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 6*4, None)
+        # glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, 6*4, c_void_p(8))
+
+        # glDrawArrays(GL_QUADS, 0, 12)
+
+        glBindSampler(1, self.texsampler)
+
+        glActiveTexture(GL_TEXTURE0 + 1)
+        self.tex()
+        glUniform1i(self.texture_uniform, 1)
+        
+        self.squares.draw()
