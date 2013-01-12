@@ -141,13 +141,6 @@ class Game(World):
         self.camera_to_clip_uniform = glGetUniformLocation(self.shaderprogram, 'CameraToClipTransform')
         self.texture_uniform = glGetUniformLocation(self.shaderprogram, 'tex')
 
-        self.squares = Primitives(GL_QUADS, 0, 1)
-        self.squares.addvertex([-1,-1], [0,1])
-        self.squares.addvertex([-1,1], [0,0])
-        self.squares.addvertex([1,1], [1,0])
-        self.squares.addvertex([1,-1], [1,1])
-        self.squares.finalize_buffer()
-
         self.tex = texture.Texture('image.png')
 
         self.hexes = Primitives(GL_TRIANGLES, 0, 1)
@@ -179,22 +172,6 @@ class Game(World):
 
         glUniform2fv(self.camera_center_uniform, 1, self.camerapos)
         glUniformMatrix4fv(self.camera_to_clip_uniform, 1, False, make_ortho_matrix(-3 * screenratio, 3 * screenratio, -3, 3, 10, -10))
-
-        # glBindBuffer(GL_ARRAY_BUFFER, self.vertexbuffer)
-        # glEnableVertexAttribArray(0)
-        # glEnableVertexAttribArray(1)
-        # glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 6*4, None)
-        # glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, 6*4, c_void_p(8))
-
-        # glDrawArrays(GL_TRIANGLES, 0, 3)
-
-        # glBindBuffer(GL_ARRAY_BUFFER, self.backgroundbuffer)
-        # glEnableVertexAttribArray(0)
-        # glEnableVertexAttribArray(1)
-        # glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 6*4, None)
-        # glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, 6*4, c_void_p(8))
-
-        # glDrawArrays(GL_QUADS, 0, 12)
 
         glBindSampler(1, self.texsampler)
 
