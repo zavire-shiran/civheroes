@@ -11,6 +11,6 @@ uniform sampler2D tex;
 
 void main()
 {
-//  outputColor = pow(color, gamma);
   outputColor = texture(tex, texcoord);
+  outputColor = pow(outputColor, gamma);
 }

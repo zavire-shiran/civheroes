@@ -1,6 +1,7 @@
 from OpenGL.GL import *
 import numpy
 import texture
+import math
 from ctypes import c_void_p
 
 currentworld = None
@@ -56,6 +57,29 @@ def make_ortho_matrix(left, right, bottom, top, near, far):
                         [0, 0, 0, 1]], numpy.float32)
 
 
+def hexpos(pos, hexsize):
+    x, y = pos
+    if x % 2 == 0:
+        return (x * hexsize * 0.75,
+                y * hexsize * math.sqrt(3)/2 + math.sqrt(3)/4 * hexsize)
+    else:
+        return (x * hexsize * 0.75,
+                y * hexsize * math.sqrt(3)/2)
+
+
+def hexcorners(pos, hexsize, scale=0.98):
+    pos = hexpos(pos, hexsize)
+    size = float(hexsize)/2 * scale
+    halfsize = size/2
+    top = size*math.sqrt(3)/2
+    return [[pos[0]+size, pos[1]], 
+            [pos[0]+halfsize, pos[1]+top],
+            [pos[0]-halfsize, pos[1]+top],
+            [pos[0]-size, pos[1]],
+            [pos[0]-halfsize, pos[1]-top],
+            [pos[0]+halfsize, pos[1]-top]]
+
+
 class Primitives:
     def __init__(self, primtype, pos_attrib_loc, texcoord_attrib_loc):
         self.buffer = []
@@ -106,24 +130,6 @@ class World:
         pass
 
 
-rawbufferdata = [0, 0, 1, 0, 0, 1,
-                 0, 1, 0, 1, 0, 1,
-                 1, 0, 0, 0, 1, 1]
-bufferdata = numpy.array(rawbufferdata, numpy.float32)
-
-backgroundbuffer = numpy.array([#-0.5, -0.5, 0, 1, 0, 1,
-                                #0.5, -0.5, 0, 1, 0, 1,
-                                #0.5, 0.5, 0, 1, 0, 1,
-                                #-0.5, 0.5, 0, 1, 0, 1,
-                                0, 0, 1, 1, 1, 1,
-                                0, -1, 1, 1, 1, 1,
-                                -1, -1, 1, 1, 1, 1,
-                                -1, 0, 1, 1, 1, 1,
-                                1, 1, 0, 0, 0, 1,
-                                1, 2, 1, 0, 0, 1,
-                                2, 2, 1, 0, 0, 1,
-                                2, 1, 0, 0, 0, 1], numpy.float32)
-
 
 class Game(World):
     def __init__(self, previous = None):
@@ -135,23 +141,22 @@ class Game(World):
         self.camera_to_clip_uniform = glGetUniformLocation(self.shaderprogram, 'CameraToClipTransform')
         self.texture_uniform = glGetUniformLocation(self.shaderprogram, 'tex')
 
-        self.vertexbuffer = glGenBuffers(1)
-        glBindBuffer(GL_ARRAY_BUFFER, self.vertexbuffer)
-        glBufferData(GL_ARRAY_BUFFER, bufferdata, GL_STATIC_DRAW)
-
-        self.backgroundbuffer = glGenBuffers(1)
-        glBindBuffer(GL_ARRAY_BUFFER, self.backgroundbuffer)
-        glBufferData(GL_ARRAY_BUFFER, backgroundbuffer, GL_STATIC_DRAW)
-
         self.squares = Primitives(GL_QUADS, 0, 1)
-        #self.squares.addprim([[-2, 1], [-2, 2], [-3, 2], [-3, 1]], [0, 0, 1, 1])
-        self.squares.addvertex([0,0], [0,0])
-        self.squares.addvertex([0,1], [0,1])
-        self.squares.addvertex([1,1], [1,1])
-        self.squares.addvertex([1,0], [1,0])
+        self.squares.addvertex([-1,-1], [0,1])
+        self.squares.addvertex([-1,1], [0,0])
+        self.squares.addvertex([1,1], [1,0])
+        self.squares.addvertex([1,-1], [1,1])
         self.squares.finalize_buffer()
 
         self.tex = texture.Texture('image.png')
+
+        self.hexes = Primitives(GL_TRIANGLES, 0, 1)
+        corners = hexcorners((0,0), 1.0)
+        for i in xrange(len(corners)-2):
+            self.hexes.addvertex(corners[0], corners[0])
+            self.hexes.addvertex(corners[i+1], corners[i+1])
+            self.hexes.addvertex(corners[i+2], corners[i+2])
+        self.hexes.finalize_buffer()
 
         texsamplers = ctypes.c_uint(0)
         glGenSamplers(1, texsamplers)
@@ -161,14 +166,16 @@ class Game(World):
         glSamplerParameteri(self.texsampler, GL_TEXTURE_WRAP_S, GL_REPEAT)
         glSamplerParameteri(self.texsampler, GL_TEXTURE_WRAP_T, GL_REPEAT)
 
+        self.camerapos = [0,0]
+
+        self.time = 0
+
     def draw(self):
         glUseProgram(self.shaderprogram)
 
-        camerapos = [1,0]
-
         screenratio = float(screensize[0]) / screensize[1]
 
-        glUniform2fv(self.camera_center_uniform, 1, camerapos)
+        glUniform2fv(self.camera_center_uniform, 1, self.camerapos)
         glUniformMatrix4fv(self.camera_to_clip_uniform, 1, False, make_ortho_matrix(-3 * screenratio, 3 * screenratio, -3, 3, 10, -10))
 
         # glBindBuffer(GL_ARRAY_BUFFER, self.vertexbuffer)
@@ -193,4 +200,9 @@ class Game(World):
         self.tex()
         glUniform1i(self.texture_uniform, 1)
         
-        self.squares.draw()
+        #self.squares.draw()
+        self.hexes.draw()
+
+    def step(self, dt):
+        self.time += dt
+        #self.camerapos = [math.cos(self.time*5/2.0), math.cos(self.time * 3/2.0)]
