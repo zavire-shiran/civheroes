@@ -148,7 +148,7 @@ class Game(World):
             for y in xrange(15):
                 corners = hexcorners((x-7,y-7), 1.0)
                 texcorners = hexcorners((0.65, 0.5), 1.0)
-                texcorners = [[s/4.0, t/3.0] for (s, t) in texcorners]
+                texcorners = [[s/4.0 + (x/4.0), t/3.0 + ((y % 2) / 3.0)] for (s, t) in texcorners]
                 for i in xrange(len(corners)-2):
                     self.hexes.addvertex(corners[0], texcorners[0])
                     self.hexes.addvertex(corners[i+1], texcorners[i+1])
