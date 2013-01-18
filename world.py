@@ -141,16 +141,18 @@ class Game(World):
         self.camera_to_clip_uniform = glGetUniformLocation(self.shaderprogram, 'CameraToClipTransform')
         self.texture_uniform = glGetUniformLocation(self.shaderprogram, 'tex')
 
-        self.tex = texture.Texture('image.png')
+        self.tex = texture.Texture('terrain.png')
 
         self.hexes = Primitives(GL_TRIANGLES, 0, 1)
         for x in xrange(15):
             for y in xrange(15):
                 corners = hexcorners((x-7,y-7), 1.0)
+                texcorners = hexcorners((0.65, 0.5), 1.0)
+                texcorners = [[s/4.0, t/3.0] for (s, t) in texcorners]
                 for i in xrange(len(corners)-2):
-                    self.hexes.addvertex(corners[0], corners[0])
-                    self.hexes.addvertex(corners[i+1], corners[i+1])
-                    self.hexes.addvertex(corners[i+2], corners[i+2])
+                    self.hexes.addvertex(corners[0], texcorners[0])
+                    self.hexes.addvertex(corners[i+1], texcorners[i+1])
+                    self.hexes.addvertex(corners[i+2], texcorners[i+2])
         self.hexes.finalize_buffer()
 
         texsamplers = ctypes.c_uint(0)
@@ -183,6 +185,5 @@ class Game(World):
         self.hexes.draw()
 
     def step(self, dt):
-        print dt
         self.time += dt
         #self.camerapos = [math.cos(self.time*5/2.0), math.cos(self.time * 3/2.0)]
