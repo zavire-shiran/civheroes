@@ -2,7 +2,11 @@ from OpenGL.GL import *
 import numpy
 import texture
 import math
+from collections import defaultdict
+import random
 from ctypes import c_void_p
+import pprint
+import pygame
 
 currentworld = None
 screensize = None
@@ -61,7 +65,7 @@ def hexpos(pos, hexsize):
     x, y = pos
     if x % 2 == 0:
         return (x * hexsize * 0.75,
-                y * hexsize * math.sqrt(3)/2 + math.sqrt(3)/4 * hexsize)
+                y * hexsize * math.sqrt(3)/2 - math.sqrt(3)/4 * hexsize)
     else:
         return (x * hexsize * 0.75,
                 y * hexsize * math.sqrt(3)/2)
@@ -130,7 +134,6 @@ class World:
         pass
 
 
-
 class Game(World):
     def __init__(self, previous = None):
         vertshader = createshader('color_vertex.shader', GL_VERTEX_SHADER)
@@ -140,15 +143,21 @@ class Game(World):
         self.camera_center_uniform = glGetUniformLocation(self.shaderprogram, 'CameraCenter')
         self.camera_to_clip_uniform = glGetUniformLocation(self.shaderprogram, 'CameraToClipTransform')
         self.texture_uniform = glGetUniformLocation(self.shaderprogram, 'tex')
+        self.scale_uniform = glGetUniformLocation(self.shaderprogram, 'scale')
 
         self.tex = texture.Texture('terrain.png')
 
+        self.map = initworldmap((50, 50))
+
         self.hexes = Primitives(GL_TRIANGLES, 0, 1)
-        for x in xrange(15):
-            for y in xrange(15):
-                corners = hexcorners((x-7,y-7), 1.0)
-                texcorners = hexcorners((0.65, 0.5), 1.0)
-                texcorners = [[s/4.0 + (x/4.0), t/3.0 + ((y % 2) / 3.0)] for (s, t) in texcorners]
+        for x, row in enumerate(self.map):
+            for y, tile in enumerate(row):
+                corners = hexcorners((x-7,y-7), 0.5)
+                texcorners = hexcorners((0.65, 0.5), 0.5)
+                terrainpos = terrainlookup(tile['terrain'])
+                texcorners = [[s/4.0 + (terrainpos[0]/4.0),
+                               t/3.0 + (terrainpos[1] / 3.0)]
+                              for (s, t) in texcorners]
                 for i in xrange(len(corners)-2):
                     self.hexes.addvertex(corners[0], texcorners[0])
                     self.hexes.addvertex(corners[i+1], texcorners[i+1])
@@ -164,8 +173,40 @@ class Game(World):
         glSamplerParameteri(self.texsampler, GL_TEXTURE_WRAP_T, GL_REPEAT)
 
         self.camerapos = [0,0]
+        self.scale = 1.0
 
         self.time = 0
+
+        self.camcontrols = {'left': False, 'right': False, 'up': False, 'down': False, 'zoomin':False, 'zoomout':False}
+
+    def keydown(self, key):
+        print key
+        if key == pygame.K_RIGHT:
+            self.camcontrols['right'] = True
+        if key == pygame.K_LEFT:
+            self.camcontrols['left'] = True
+        if key == pygame.K_UP:
+            self.camcontrols['up'] = True
+        if key == pygame.K_DOWN:
+            self.camcontrols['down'] = True
+        if key == pygame.K_MINUS:
+            self.camcontrols['zoomout'] = True
+        if key == pygame.K_EQUALS:
+            self.camcontrols['zoomin'] = True
+
+    def keyup(self, key):
+        if key == pygame.K_RIGHT:
+            self.camcontrols['right'] = False
+        if key == pygame.K_LEFT:
+            self.camcontrols['left'] = False
+        if key == pygame.K_UP:
+            self.camcontrols['up'] = False
+        if key == pygame.K_DOWN:
+            self.camcontrols['down'] = False
+        if key == pygame.K_MINUS:
+            self.camcontrols['zoomout'] = False
+        if key == pygame.K_EQUALS:
+            self.camcontrols['zoomin'] = False
 
     def draw(self):
         glUseProgram(self.shaderprogram)
@@ -174,6 +215,7 @@ class Game(World):
 
         glUniform2fv(self.camera_center_uniform, 1, self.camerapos)
         glUniformMatrix4fv(self.camera_to_clip_uniform, 1, False, make_ortho_matrix(-3 * screenratio, 3 * screenratio, -3, 3, 10, -10))
+        glUniform1f(self.scale_uniform, self.scale)
 
         glBindSampler(1, self.texsampler)
 
@@ -185,5 +227,128 @@ class Game(World):
         self.hexes.draw()
 
     def step(self, dt):
+#        print self.scale
         self.time += dt
-        #self.camerapos = [math.cos(self.time*5/2.0), math.cos(self.time * 3/2.0)]
+        if self.camcontrols['right']:
+            self.camerapos[0] += 2 * dt
+        if self.camcontrols['left']:
+            self.camerapos[0] -= 2 * dt
+        if self.camcontrols['up']:
+            self.camerapos[1] += 2 * dt
+        if self.camcontrols['down']:
+            self.camerapos[1] -= 2 * dt
+        if self.camcontrols['zoomin']:
+            print self.scale,
+            self.scale += dt/2
+            print dt/2, self.scale
+        if self.camcontrols['zoomout']:
+            self.scale -= dt/2
+            self.scale = max(self.scale, 0.2)
+            print self.scale
+
+
+def terrainlookup(terrain):
+    if terrain == 'hill':
+        return (0, 0)
+    if terrain == 'desert':
+        return (1, 0)
+    if terrain == 'forest':
+        return (2, 0)
+    if terrain == 'tundra':
+        return (3, 0)
+    if terrain == 'grassland':
+        return (0, 1)
+    if terrain == 'mountain':
+        return (1, 1)
+    if terrain == 'ocean':
+        return (2, 1)
+    if terrain == 'coast':
+        return (3, 1)
+    return (2, 3)
+
+
+def worldpos2gridpos(pos, hexsize):
+    pos = [x/hexsize for x in pos]
+    pos[0] = (pos[0]) / 0.75
+    pos[0] = int(math.floor(pos[0] + 0.5))
+    pos[1] /= math.sqrt(3)/2
+    if pos[0] % 2 == 0:
+        pos[1] -= 0.5
+    pos[1] = int(math.floor(pos[1] + 0.5))
+    return pos
+
+def adjacenthexes(pos):
+    ret = [(pos[0],   pos[1]+1),
+           (pos[0],   pos[1]-1)]
+    if pos[0] % 2 == 0:
+        ret += [(pos[0]+1, pos[1]+1), (pos[0]-1, pos[1]+1)]
+    ret += [(pos[0]+1, pos[1]),
+            (pos[0]-1, pos[1])]
+    if pos[0] % 2 == 1:
+        ret += [(pos[0]+1, pos[1]-1), (pos[0]-1, pos[1]-1)]
+    return ret
+
+
+def adjacenthexesbounded(pos, size):
+    return [h for h in adjacenthexes(pos) if h[0] >= 0 and h[0] < size[0] and h[1] >= 0 and h[1] < size[1]]
+
+
+def initworldmap(mapsize):
+    worldmap  = [[{'terrain':'ocean', 'unit':None, 'improvement':None, 'owner':None, 'influence':defaultdict(lambda:0.0)}
+            for y in xrange(mapsize[1])] for x in xrange(mapsize[0])]
+
+    generateContinents(worldmap, mapsize)
+
+    return worldmap
+
+
+def generateContinents(ret, mapsize):
+    mincontinents = 1
+    minsize = 10
+    maxsize = 20
+    minlandratio = 0.3
+    totalsquares = mapsize[0] * mapsize[1]
+
+    numcontinents = 0
+    landsquares = 0
+    availablehexes = set((x,y) for x in xrange(mapsize[0]) for y in xrange(mapsize[1]))
+    # Grow continents
+    while numcontinents < mincontinents or float(landsquares) / totalsquares < minlandratio:
+        seed = random.sample(availablehexes, 1)[0]
+        availablehexes.remove(seed)
+        ret[seed[0]][seed[1]]['terrain'] = 'grassland'
+        numcontinents += 1
+        landsquares += 1
+        continentsize = random.randint(minsize, maxsize)
+        growablearea = set(h for h in adjacenthexesbounded(seed, mapsize) if h in availablehexes)
+        for i in xrange(continentsize):
+            if len(growablearea) == 0:
+                continue
+            growinto = random.sample(growablearea, 1)[0]
+            growablearea.remove(growinto)
+            ret[growinto[0]][growinto[1]]['terrain'] = 'grassland'
+            availablehexes.remove(growinto)
+            landsquares += 1
+            for h in adjacenthexesbounded(growinto, mapsize):
+                if h in availablehexes and ret[h[0]][h[1]]['terrain'] == 'ocean':
+                    growablearea.add(h)
+        availablehexes -= growablearea
+    # distribute other terrain
+    for x, row in enumerate(ret):
+        for y, tile in enumerate(row):
+            if tile['terrain'] == 'ocean':
+                continue
+            lat = float(abs((mapsize[1] / 2) - y)) / (mapsize[1]/2)
+            tundrachance = max((lat - 0.8) * 5, 0)
+            desertchance = max((0.2 - lat) * 5, 0)
+            roll = random.random()
+            if roll < tundrachance:
+                tile['terrain'] = 'tundra'
+            if roll > 1.0 - desertchance:
+                tile['terrain'] = 'desert'
+    for x, row in enumerate(ret):
+        for y, tile in enumerate(row):
+            if tile['terrain'] == 'ocean':
+                for adj in [ret[adjx][adjy] for (adjx, adjy) in adjacenthexesbounded((x,y), mapsize)]:
+                    if adj['terrain'] != 'ocean' and adj['terrain'] != 'coast':
+                        tile['terrain'] = 'coast'
