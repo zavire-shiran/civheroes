@@ -180,7 +180,6 @@ class Game(World):
         self.camcontrols = {'left': False, 'right': False, 'up': False, 'down': False, 'zoomin':False, 'zoomout':False}
 
     def keydown(self, key):
-        print key
         if key == pygame.K_RIGHT:
             self.camcontrols['right'] = True
         if key == pygame.K_LEFT:
@@ -227,7 +226,6 @@ class Game(World):
         self.hexes.draw()
 
     def step(self, dt):
-#        print self.scale
         self.time += dt
         if self.camcontrols['right']:
             self.camerapos[0] += 2 * dt
@@ -238,13 +236,10 @@ class Game(World):
         if self.camcontrols['down']:
             self.camerapos[1] -= 2 * dt
         if self.camcontrols['zoomin']:
-            print self.scale,
             self.scale += dt/2
-            print dt/2, self.scale
         if self.camcontrols['zoomout']:
             self.scale -= dt/2
             self.scale = max(self.scale, 0.2)
-            print self.scale
 
 
 def terrainlookup(terrain):
@@ -304,8 +299,8 @@ def initworldmap(mapsize):
 
 def generateContinents(ret, mapsize):
     mincontinents = 1
-    minsize = 10
-    maxsize = 20
+    minsize = 20
+    maxsize = 30
     minlandratio = 0.3
     totalsquares = mapsize[0] * mapsize[1]
 
