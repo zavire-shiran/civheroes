@@ -228,13 +228,13 @@ class Game(World):
     def step(self, dt):
         self.time += dt
         if self.camcontrols['right']:
-            self.camerapos[0] += 2 * dt
+            self.camerapos[0] += 2 * dt / self.scale
         if self.camcontrols['left']:
-            self.camerapos[0] -= 2 * dt
+            self.camerapos[0] -= 2 * dt / self.scale
         if self.camcontrols['up']:
-            self.camerapos[1] += 2 * dt
+            self.camerapos[1] += 2 * dt / self.scale
         if self.camcontrols['down']:
-            self.camerapos[1] -= 2 * dt
+            self.camerapos[1] -= 2 * dt / self.scale
         if self.camcontrols['zoomin']:
             self.scale += dt/2
         if self.camcontrols['zoomout']:
